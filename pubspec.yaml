@@ -1,0 +1,52 @@
+name: esp
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_native_splash: ^2.0.0
+  flutter_launcher_icons:
+  permission_handler: ^10.4.1 # Add a valid version
+  flutter_bluetooth_serial: 0.4.0 # Add a valid version
+  animate_do: ^2.0.0 # Add a valid version
+  shared_preferences:
+  location:
+  intl:
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+# Configuration for flutter_native_splash
+flutter_native_splash:
+  color: "#242038"  # Background color updated
+  image: assets/images/submark2.png  # Centered image (no duplication)
+#  branding: assets/images/welding.jpg  # Branding at the bottom (optional)
+  color_dark: "#242038"  # Dark mode background color
+
+  android_12:
+    image: assets/images/submark2.png  # Ensures correct scaling for Android 12+
+    icon_background_color: "#242038"  # Background color for Android 12+
+    image_dark: assets/images/submark2.png
+    icon_background_color_dark: "#242038"
+
+  android: true
+  ios: true
+  web: false
+
+  android_gravity: center  # Ensures the image is centered without repeating
+  ios_content_mode: center
+  fullscreen: true
+
