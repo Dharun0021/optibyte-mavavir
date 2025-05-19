@@ -1,6 +1,9 @@
 import 'package:esp/screens/login_page.dart';
 import 'package:esp/service.dart';
 import 'package:esp/screens/splash_screen.dart';
+import 'package:esp/screens/configuration_page.dart';
+import 'package:esp/screens/device_config_landing.dart';
+import 'package:esp/screens/ac_customization_page.dart';
 import 'package:flutter/material.dart';
 
 
@@ -15,7 +18,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'FusionByte App',
+      title: 'IR-Blaster App',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -24,7 +27,10 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => const SplashScreen(),
         '/login': (context) => LoginPage(),
-        '/home': (context) => const HomePage(), // You'll need to create this
+        '/home': (context) => const HomePage(),
+        // '/config': (context) => const ConfigurationPage(),
+        '/landing': (context) => const LandingPage(),
+        '/customization': (context) => const AcCustomizationPage(),
       },
     );
   }

@@ -1,4 +1,4 @@
-// splash_screen.dart
+// Clean splash_screen.dart without background image
 import 'package:esp/auth/auth_service.dart';
 import 'package:esp/service.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +27,6 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    // Check if user is already authenticated
     bool isAuthenticated = await _authService.isAuthenticated();
 
     if (mounted) {
@@ -43,48 +42,36 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 13, 41, 64),
+      backgroundColor: const Color(0xFF0D2940),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: Image.asset(
-                  'assets/images/welding.jpg',
-                  fit: BoxFit.cover,
-                ),
-              ),
+            Image.asset(
+              'assets/images/ir_icon.png',
+              width: 100,
+              height: 100,
             ),
             const SizedBox(height: 30),
-
             const Text(
-              'FusionByte',
+              'IR BLASTER',
               style: TextStyle(
-                fontSize: 32,
+                fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: Color.fromRGBO(84, 196, 86, 1),
-                letterSpacing: 1.5,
+                color: Colors.white,
               ),
             ),
-
-            const SizedBox(height: 50),
-
+            const SizedBox(height: 10),
+            const Text(
+              'Smart Control. Instantly.',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 40),
             const CircularProgressIndicator(
-              color: Color.fromRGBO(84, 196, 86, 1),
-              strokeWidth: 3,
+              color: Colors.white,
             ),
           ],
         ),

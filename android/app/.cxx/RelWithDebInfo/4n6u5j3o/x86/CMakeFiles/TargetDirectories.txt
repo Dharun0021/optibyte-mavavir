@@ -1,0 +1,2 @@
+C:/Users/Ramya Muthukumar/OneDrive/Desktop/Sustainabyte/BLEapp/OptibyteApp/android/app/.cxx/RelWithDebInfo/4n6u5j3o/x86/CMakeFiles/edit_cache.dir
+C:/Users/Ramya Muthukumar/OneDrive/Desktop/Sustainabyte/BLEapp/OptibyteApp/android/app/.cxx/RelWithDebInfo/4n6u5j3o/x86/CMakeFiles/rebuild_cache.dir

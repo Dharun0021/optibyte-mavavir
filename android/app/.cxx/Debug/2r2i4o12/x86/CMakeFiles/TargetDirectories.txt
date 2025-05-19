@@ -1,0 +1,2 @@
+C:/Users/91978/Desktop/Sustainabyte/BLEapp/OptibyteApp/android/app/.cxx/Debug/2r2i4o12/x86/CMakeFiles/edit_cache.dir
+C:/Users/91978/Desktop/Sustainabyte/BLEapp/OptibyteApp/android/app/.cxx/Debug/2r2i4o12/x86/CMakeFiles/rebuild_cache.dir
