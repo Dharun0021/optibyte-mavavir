@@ -34,9 +34,10 @@
         android:xlargeScreens="true"
         android:anyDensity="true"/>
     <application
-        android:label="FusionByte"
+        android:label="IR-Blaster"
         android:name="${applicationName}"
-        android:icon="@mipmap/submark"
+        android:icon="@mipmap/launcher_icon">
+        android:resource="@xml/file_paths"
         android:largeHeap="true"
         android:requestLegacyExternalStorage="true"
         android:preserveLegacyExternalStorage="true"

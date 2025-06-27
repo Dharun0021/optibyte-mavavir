@@ -53,6 +53,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _handleReceivedData(String data) {
+    if (!mounted) return;
     debugPrint("📥 Received: $data");
     setState(() {
       receivedData = data;
@@ -60,6 +61,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _handleDisconnection() {
+    if (!mounted) return;
     debugPrint("⚠️ Bluetooth Disconnected");
     setState(() {
       connectingAddress = null;
@@ -79,16 +81,19 @@ class _HomePageState extends State<HomePage> {
     _scanSubscription?.cancel();
     _scanSubscription = _bluetoothService.startScan().listen(
           (List<BluetoothDevice> updatedDevices) {
+        if (!mounted) return;
         setState(() {
           devices = updatedDevices;
         });
       },
       onDone: () {
+        if (!mounted) return;
         setState(() {
           isScanning = false;
         });
       },
       onError: (error) {
+        if (!mounted) return;
         setState(() => isScanning = false);
         _showError('Scan failed: $error');
       },
@@ -110,6 +115,7 @@ class _HomePageState extends State<HomePage> {
       await _bluetoothService.connectToDevice(device);
 
       if (_bluetoothService.isConnected && _bluetoothService.activeConnection != null) {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -123,16 +129,17 @@ class _HomePageState extends State<HomePage> {
         _showError("Connection not available. Please retry.");
       }
     } finally {
+      if (!mounted) return;
       setState(() => connectingAddress = null);
     }
   }
 
-  Future<void> _showDisconnectConfirmation(BuildContext context) async {
-    final bool? result = await showDialog<bool>(
+  Future<void> _disconnectManually() async {
+    final shouldDisconnect = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirm Disconnect'),
-        content: const Text('Are you sure you want to disconnect?'),
+        title: const Text('Disconnect Bluetooth'),
+        content: const Text('Do you want to disconnect Bluetooth?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Disconnect')),
@@ -140,9 +147,9 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
-    if (result == true) {
+    if (shouldDisconnect == true) {
       await _bluetoothService.disconnect();
-      _showSuccess('Disconnected');
+      _showSuccess('Bluetooth disconnected manually');
     }
   }
 
@@ -150,7 +157,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF252039),
+        backgroundColor: const Color(0xFF02CCFE),
         title: Row(
           children: [
             const CircleAvatar(
@@ -162,7 +169,7 @@ class _HomePageState extends State<HomePage> {
               child: Text(
                 'IR-BLASTER',
                 style: TextStyle(
-                  color: Colors.green,
+                  color: Colors.black,
                   fontFamily: 'Arial',
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
@@ -176,10 +183,10 @@ class _HomePageState extends State<HomePage> {
           if (isScanning)
             const Padding(
               padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(color: Colors.white),
+              child: CircularProgressIndicator(color: Colors.black),
             ),
           IconButton(
-            icon: const Icon(Icons.history, color: Colors.white),
+            icon: const Icon(Icons.history, color: Colors.black),
             onPressed: () {
               Navigator.push(
                 context,
@@ -193,7 +200,11 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
+            icon: const Icon(Icons.bluetooth_disabled, color: Colors.red),
+            onPressed: _disconnectManually,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.black),
             onPressed: () async {
               final shouldLogout = await showDialog<bool>(
                 context: context,
@@ -216,15 +227,6 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(width: 8),
         ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(4.0),
-          child: Divider(
-            color: Colors.white,
-            thickness: 4,
-            indent: 0,
-            endIndent: 0,
-          ),
-        ),
       ),
       body: SafeArea(
         child: Padding(
@@ -241,7 +243,9 @@ class _HomePageState extends State<HomePage> {
                 child: devices.isEmpty
                     ? Center(
                   child: Text(
-                    isScanning ? 'Searching for devices...' : 'No devices found. Tap Scan to search.',
+                    isScanning
+                        ? 'Searching for devices...'
+                        : 'No devices found. Tap Scan to search.',
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                 )
@@ -257,7 +261,8 @@ class _HomePageState extends State<HomePage> {
                         title: Text(device.name ?? 'Unknown Device'),
                         subtitle: Text(device.address),
                         trailing: ElevatedButton(
-                          onPressed: isConnecting ? null : () => connectToDevice(device),
+                          onPressed:
+                          isConnecting ? null : () => connectToDevice(device),
                           child: Text(isConnecting ? 'Connecting...' : 'Connect'),
                         ),
                       ),

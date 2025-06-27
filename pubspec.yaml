@@ -13,39 +13,53 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_native_splash: ^2.0.0
   flutter_blue_plus: ^1.32.4
-  flutter_launcher_icons:
-  permission_handler: ^11.0.0 # Add a valid version
-  flutter_bluetooth_serial: 0.4.0 # Add a valid version
-  animate_do: ^2.0.0 # Add a valid version
-  shared_preferences:
-  location:
-  intl:
+  flutter_launcher_icons: ^0.13.1
+  permission_handler: ^11.0.0
+  flutter_bluetooth_serial: 0.4.0
+  animate_do: ^2.0.0
+  shared_preferences: ^2.2.2
+  location: ^5.0.3
+  intl: ^0.19.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+#  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
 
-# Configuration for flutter_native_splash
-flutter_native_splash:
-  color: "#FAF9F6"  # ✅ Light background color (e.g., off-white)
-  image: assets/images/submark2.png
-  color_dark: "#FAF9F6"  # ✅ Ensure dark mode also uses light color
+# Splash Screen Configuration
+#flutter_native_splash:
+#  color: "#7BD5FF"
+#  image: assets/images/submark2.png
+#  color_dark: "#7BD5FF"
+#  android_12:
+#    image: assets/images/submark2.png
+#    icon_background_color: "#7BD5FF"
+#    image_dark: assets/images/submark2.png
+#    icon_background_color_dark: "#7BD5FF"
+#  android: true
+#  ios: true
+#  web: false
+#  android_gravity: center
+#  ios_content_mode: center
+#  fullscreen: true
 
-  android_12:
-    image: assets/images/submark2.png
-    icon_background_color: "#FAF9F6"
-    image_dark: assets/images/submark2.png
-    icon_background_color_dark: "#FAF9F6"
-
-  android: true
+flutter_icons:
+  android: "launcher_icon"
   ios: true
-  web: false
-
-  android_gravity: center
-  ios_content_mode: center
-  fullscreen: true
+  image_path: "assets/icon/icon1.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  web:
+    generate: true
+    image_path: "assets/icon/icon1.png"
+    background_color: "#hexcode"
+    theme_color: "#hexcode"
+  windows:
+    generate: true
+    image_path: "assets/icon/icon1.png"
+    icon_size: 48 # min:48, max:256, default: 48

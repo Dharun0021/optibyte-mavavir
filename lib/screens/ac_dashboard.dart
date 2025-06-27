@@ -23,11 +23,11 @@ class AcDashboardPage extends StatelessWidget {
     final double temperature = double.tryParse(temp) ?? 24.0;
 
     return Scaffold(
-      backgroundColor: Color(0xFF90EE90),
+      backgroundColor: const Color(0xFF90EE90),
       appBar: AppBar(
-        backgroundColor: Color(0xFF90EE90),
+        backgroundColor: const Color(0xFF90EE90),
         elevation: 0,
-        title: const Text('Bedroom', style: TextStyle(color: Colors.white)),
+        title: Text(model, style: const TextStyle(color: Colors.white)),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -41,10 +41,10 @@ class AcDashboardPage extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              dashboardIcon(Icons.ac_unit, "Cool"),
+              dashboardIcon(Icons.ac_unit, mode),
               dashboardIcon(Icons.air, fan),
-              dashboardIcon(Icons.autorenew, mode),
-              dashboardIcon(Icons.save, "Presets"),
+              dashboardIcon(Icons.sync_alt, swing),
+              dashboardIcon(Icons.power_settings_new, state),
             ],
           ),
           const SizedBox(height: 40),
@@ -68,13 +68,13 @@ class AcDashboardPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
+          Text("Swing Mode: $swing", style: const TextStyle(color: Colors.white70)),
           const Text("Room Temperature 78°", style: TextStyle(color: Colors.white70)),
           const Text("Humidity 45%", style: TextStyle(color: Colors.white70)),
           const SizedBox(height: 30),
           ElevatedButton(
             onPressed: () {
-              // TODO: Send BLE shutdown command
-              print("Power toggled: \$state");
+              print("Power toggled: $state");
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,

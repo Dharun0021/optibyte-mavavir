@@ -6,7 +6,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:location/location.dart';
 
 class BluetoothService {
-  // Singleton setup
   static final BluetoothService _instance = BluetoothService._internal();
   factory BluetoothService() => _instance;
   BluetoothService._internal();
@@ -15,6 +14,7 @@ class BluetoothService {
   BluetoothConnection? connection;
   StreamSubscription<Uint8List>? _dataSubscription;
   StreamController<List<BluetoothDevice>>? _devicesController;
+  Timer? _keepAliveTimer;
 
   Function(String)? onDataReceived;
   Function(String)? onError;
@@ -87,21 +87,33 @@ class BluetoothService {
       connection = await BluetoothConnection.toAddress(device.address)
           .timeout(const Duration(seconds: 8));
       if (connection!.isConnected) {
+        onSuccess?.call('🔗 Bluetooth Connected to ${device.name}');
+
         _dataSubscription?.cancel();
         _dataSubscription = connection!.input!.listen(
               (data) {
             onDataReceived?.call(utf8.decode(data));
           },
-          onDone: _handleConnectionError,
-          onError: (e) => _handleConnectionError(),
+          onDone: () => _handleConnectionLoss(),
+          onError: (e) => _handleConnectionLoss(),
           cancelOnError: true,
         );
-        onSuccess?.call('Connected to ${device.name}');
+
+        _startKeepAlive();
       }
-    } catch (_) {
-      onError?.call('Connection failed');
+    } catch (e) {
+      onError?.call('❌ Connection failed');
       disconnect();
     }
+  }
+
+  void _startKeepAlive() {
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = Timer.periodic(Duration(seconds: 5), (timer) {
+      if (isConnected) {
+        sendCommand('ping');
+      }
+    });
   }
 
   Future<void> sendCommand(String command) async {
@@ -109,27 +121,43 @@ class BluetoothService {
       onError?.call('Not connected to any device');
       return;
     }
-    final bytes = utf8.encode('$command\r\n');
-    connection!.output.add(Uint8List.fromList(bytes));
-    await connection!.output.allSent;
+    try {
+      final bytes = utf8.encode('$command\r\n');
+      connection!.output.add(Uint8List.fromList(bytes));
+      await connection!.output.allSent;
+    } catch (e) {
+      onError?.call('Send failed: ${e.toString()}');
+    }
   }
 
-  void _handleConnectionError() {
-    disconnect();
-    onError?.call('Connection lost');
+  void _handleConnectionLoss() {
+    // Do not immediately disconnect — instead notify disconnection
+    if (connection != null && !connection!.isConnected) {
+      _cleanupResources();
+      onDisconnected?.call();
+      onError?.call('❌ Bluetooth Disconnected');
+    }
   }
 
   Future<void> disconnect() async {
     try {
+      _keepAliveTimer?.cancel();
       await _dataSubscription?.cancel();
       if (connection != null && connection!.isConnected) {
         await connection!.finish();
       }
-    } finally {
-      connection = null;
-      _dataSubscription = null;
+    } catch (_) {}
+    finally {
+      _cleanupResources();
       onDisconnected?.call();
+      onSuccess?.call('🔌 Bluetooth manually disconnected');
     }
+  }
+
+  void _cleanupResources() {
+    connection = null;
+    _dataSubscription = null;
+    _keepAliveTimer = null;
   }
 
   void dispose() {

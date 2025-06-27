@@ -17,18 +17,15 @@ class ConfigurationPage extends StatelessWidget {
 
   Future<void> _disconnectAndNavigate(BuildContext context) async {
     try {
-      // Properly close Bluetooth connection
       if (bluetoothService.connection != null &&
           bluetoothService.connection!.isConnected) {
         await bluetoothService.disconnect();
       }
 
-      // Show feedback
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Bluetooth disconnected")),
       );
 
-      // Navigate back to Bluetooth scan page (HomePage)
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
@@ -45,59 +42,62 @@ class ConfigurationPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Configuration Page", style: TextStyle(color: Colors.green)),
-        backgroundColor: const Color(0xFF252039),
+        title: const Text("Configuration Page", style: TextStyle(color: Colors.black)),
+        backgroundColor: const Color(0xFF02CCFE),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.green),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => _disconnectAndNavigate(context),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.bluetooth_disabled, color: Colors.red),
             tooltip: 'Disconnect',
-            onPressed: () => _disconnectAndNavigate(context), // ✅ disconnect properly
+            onPressed: () => _disconnectAndNavigate(context),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ElevatedButton.icon(
-              icon: const Icon(Icons.settings),
-              label: const Text("Device Configuration", style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 20.0),
-                backgroundColor: Colors.green,
-                textStyle: const TextStyle(fontSize: 18),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // Center vertically
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.settings),
+                label: const Text("Device Configuration", style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                  backgroundColor: Colors.green,
+                  textStyle: const TextStyle(fontSize: 18),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LandingPage()),
+                  );
+                },
               ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LandingPage()),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.ac_unit),
-              label: const Text("AC Configuration", style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 20.0),
-                backgroundColor: Colors.blueAccent,
-                textStyle: const TextStyle(fontSize: 18),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.ac_unit),
+                label: const Text("AC Configuration", style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                  backgroundColor: Colors.blueAccent,
+                  textStyle: const TextStyle(fontSize: 18),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AcConfigurationPage(connection: connection),
+                    ),
+                  );
+                },
               ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AcConfigurationPage(connection: connection),
-                  ),
-                );
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
