@@ -1,0 +1,2 @@
+C:/final_mobile/OptibyteApp/android/app/.cxx/RelWithDebInfo/3e6o3z6n/x86/CMakeFiles/edit_cache.dir
+C:/final_mobile/OptibyteApp/android/app/.cxx/RelWithDebInfo/3e6o3z6n/x86/CMakeFiles/rebuild_cache.dir

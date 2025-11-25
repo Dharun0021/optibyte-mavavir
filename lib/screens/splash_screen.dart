@@ -1,6 +1,3 @@
-// Clean splash_screen.dart without background image
-import 'package:esp/auth/auth_service.dart';
-import 'package:esp/service.dart';
 import 'package:flutter/material.dart';
 import 'login_page.dart';
 
@@ -12,31 +9,24 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAuthAndNavigate();
+      _goToLogin();
     });
   }
 
-  Future<void> _checkAuthAndNavigate() async {
+  Future<void> _goToLogin() async {
     await Future.delayed(const Duration(seconds: 3));
 
     if (!mounted) return;
 
-    bool isAuthenticated = await _authService.isAuthenticated();
-
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => isAuthenticated ? const HomePage() : LoginPage(),
-        ),
-      );
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => LoginPage()),
+    );
   }
 
   @override

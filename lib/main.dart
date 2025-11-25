@@ -1,11 +1,8 @@
-import 'package:esp/screens/login_page.dart';
-import 'package:esp/service.dart';
-import 'package:esp/screens/splash_screen.dart';
-import 'package:esp/screens/configuration_page.dart';
-import 'package:esp/screens/device_config_landing.dart';
-import 'package:esp/screens/ac_customization_page.dart';
 import 'package:flutter/material.dart';
-
+import 'package:esp/screens/login_page.dart';
+import 'package:esp/screens/mode_selection_page.dart';
+import 'package:esp/auth/auth_service.dart';
+import 'package:esp/screens/register_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,6 +11,19 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  Future<Widget> getInitialScreen() async {
+    final AuthService authService = AuthService();
+    final isLoggedIn = await authService.isLoggedIn();
+
+    if (isLoggedIn) {
+      debugPrint('✅ User already logged in. Going to Mode Selection.');
+      return const ModeSelectionPage();
+    } else {
+      debugPrint('⚠️ User not logged in. Going to Login.');
+      return LoginPage();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -21,16 +31,25 @@ class MyApp extends StatelessWidget {
       title: 'IR-Blaster App',
       theme: ThemeData(
         primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: const Color(0xFFF0F8FF),
       ),
-      // Define the named routes
-      initialRoute: '/',
+      home: FutureBuilder<Widget>(
+        future: getInitialScreen(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          } else {
+            return snapshot.data ?? LoginPage();
+          }
+        },
+      ),
       routes: {
-        '/': (context) => const SplashScreen(),
         '/login': (context) => LoginPage(),
-        '/home': (context) => const HomePage(),
-        // '/config': (context) => const ConfigurationPage(),
-        '/landing': (context) => const LandingPage(),
-       // '/customization': (context) => const _AcCustomizationPageState(),
+        '/register': (context) => RegisterPage(),
+        '/mode_selection': (context) => const ModeSelectionPage(),
+        // '/home': (context) => const HomePage(),
       },
     );
   }

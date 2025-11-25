@@ -1,7 +1,8 @@
-// Updated login_page.dart with new UI matching the design
-import 'dart:ui';
-import 'package:esp/auth/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:esp/auth/auth_service.dart';
+import 'package:esp/screens/mode_selection_page.dart';
+import 'package:esp/screens/register_page.dart';
+import 'package:esp/screens/forget_password_page.dart';
 
 class LoginPage extends StatelessWidget {
   final TextEditingController emailController = TextEditingController();
@@ -14,25 +15,25 @@ class LoginPage extends StatelessWidget {
     final String email = emailController.text.trim();
     final String password = passwordController.text.trim();
 
-    const allowedUsers = {
-      "demo@gmail.com": "123",
-      "demo@sustainabyte.com": "123",
-    };
+    final isValid = await _authService.validateLogin(email, password);
 
-    if (allowedUsers[email] == password) {
-      String mockToken = 'mock_token_\${DateTime.now().millisecondsSinceEpoch}';
+    if (isValid) {
+      String mockToken = 'mock_token_${DateTime.now().millisecondsSinceEpoch}';
       await _authService.saveAuthDetails(email, mockToken);
 
       if (context.mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ModeSelectionPage()),
+        );
       }
     } else {
       if (context.mounted) {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text("Error"),
-            content: const Text("Invalid credentials!"),
+            title: const Text("Login Failed"),
+            content: const Text("Incorrect username or password!"),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -48,82 +49,100 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F8FF),
+      backgroundColor: Colors.white,
       body: Center(
         child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 30),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 60),
-                const Text(
-                  "IR Blaster",
+          padding: const EdgeInsets.symmetric(horizontal: 30),
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+              const Text(
+                "IR Blaster",
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Image.asset(
+                'assets/images/ir_login_illustration.png',
+                width: 150,
+                height: 150,
+              ),
+              const SizedBox(height: 40),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("E-Mail Address", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  hintText: "E-Mail Address",
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("Password", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: "Password",
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => ForgetPasswordPage()),
+                    );
+                  },
+                  child: const Text("Forget Password?", style: TextStyle(color: Colors.lightBlue)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () => _handleLogin(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.lightBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  child: const Text("Login"),
+                ),
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => RegisterPage()),
+                  );
+                },
+                child: const Text(
+                  "Don't have an account? Register",
                   style: TextStyle(
-                    fontSize: 32,
+                    color: Colors.lightBlue,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
                   ),
                 ),
-                const SizedBox(height: 20),
-                Image.asset(
-                  'assets/images/ir_login_illustration.png',
-                  width: 150,
-                  height: 150,
-                ),
-                const SizedBox(height: 40),
-                TextField(
-                  controller: emailController,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    hintText: 'Email',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    hintText: 'Password',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 30),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () => _handleLogin(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2D71F7),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text(
-                      "Log In",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
         ),
       ),

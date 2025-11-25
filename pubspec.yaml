@@ -1,7 +1,6 @@
 name: esp
 description: "A new Flutter project."
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
@@ -11,49 +10,35 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  http: ^1.2.1
   flutter_native_splash: ^2.0.0
-  flutter_blue_plus: ^1.32.4
   flutter_launcher_icons: ^0.13.1
   permission_handler: ^11.0.0
-  flutter_bluetooth_serial: 0.4.0
+  flutter_bluetooth_serial: ^0.4.0 # ✅ Classic SPP for your ESP32
   animate_do: ^2.0.0
   shared_preferences: ^2.2.2
   location: ^5.0.3
   intl: ^0.19.0
+  wifi_scan: ^0.4.1+2 # ✅ for scanning WiFi SSIDs
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-#  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
-
-# Splash Screen Configuration
-#flutter_native_splash:
-#  color: "#7BD5FF"
-#  image: assets/images/submark2.png
-#  color_dark: "#7BD5FF"
-#  android_12:
-#    image: assets/images/submark2.png
-#    icon_background_color: "#7BD5FF"
-#    image_dark: assets/images/submark2.png
-#    icon_background_color_dark: "#7BD5FF"
-#  android: true
-#  ios: true
-#  web: false
-#  android_gravity: center
-#  ios_content_mode: center
-#  fullscreen: true
+    - assets/images/ac.jpg
+    - assets/images/tv.jpg
+    - assets/images/settopbox.jpg
 
 flutter_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/icon/icon1.png"
-  min_sdk_android: 21 # android min sdk min:16, default 21
+  min_sdk_android: 21
   web:
     generate: true
     image_path: "assets/icon/icon1.png"
@@ -62,4 +47,4 @@ flutter_icons:
   windows:
     generate: true
     image_path: "assets/icon/icon1.png"
-    icon_size: 48 # min:48, max:256, default: 48
+    icon_size: 48
