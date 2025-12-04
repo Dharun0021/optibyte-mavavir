@@ -34,25 +34,25 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   String _temperature = "--";
   String _wifiIP = "";
   bool _isWifiConnected = false;
-  final bool _yellowLedOn = true; // Bluetooth connected = Yellow LED ON
+  bool _yellowLedOn = true; // Bluetooth connected = Yellow LED ON
   bool _greenLedOn = false; // WiFi connected = Green LED ON
-  
+
   // Remote Configuration Variables
   final Set<String> _savedBrands = {}; // No default brands
   final Set<String> _expandedBrands = {};
   final Map<String, List<String>> _configProgress = {};
   final Map<String, bool> _brandConfigComplete = {};
   final Map<String, Map<String, String>> _savedRemoteConfigs = {}; // Store hex values locally
-  
+
   final List<String> _configKeys = [
     "POWER",
-    "TEMPUP", 
+    "TEMPUP",
     "TEMPDOWN",
     "MODE",
     "SWING",
     "OFF"
   ];
-  
+
   String _currentActiveBrand = "";
   bool _isConfiguring = false;
   String _configuringBrand = "";
@@ -80,6 +80,28 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     });
   }
 
+  @override
+  void dispose() {
+    _commandController.dispose();
+    _ssidController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  // ---------- PREFERENCES HELPERS (WiFi status for MQTT page) ----------
+
+  Future<void> _saveWifiStatus(bool connected, {String ssid = ""}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('wifi_connected', connected);
+      if (connected && ssid.isNotEmpty) {
+        await prefs.setString('wifi_ssid', ssid);
+      }
+    } catch (e) {
+      debugPrint("Error saving WiFi status: $e");
+    }
+  }
+
   // Load saved remotes from SharedPreferences
   Future<void> _loadSavedRemotes() async {
     try {
@@ -89,7 +111,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       setState(() {
         _savedBrands.clear();
         _savedBrands.addAll(savedBrandsJson);
-        
+
         // Mark all saved brands as configured
         for (String brand in savedBrandsJson) {
           _brandConfigComplete[brand] = true;
@@ -98,7 +120,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
 
       // Load individual remote configurations (hex values)
       await _loadRemoteConfigurations();
-      
+
       print('Loaded saved remotes: $_savedBrands');
     } catch (e) {
       print('Error loading saved remotes: $e');
@@ -109,11 +131,11 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   Future<void> _loadRemoteConfigurations() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       for (String brand in _savedBrands) {
         final configKey = 'remote_config_$brand';
         final configJson = prefs.getString(configKey);
-        
+
         if (configJson != null) {
           final Map<String, dynamic> config = jsonDecode(configJson);
           _savedRemoteConfigs[brand] = Map<String, String>.from(config);
@@ -137,27 +159,33 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   }
 
   // Save individual remote configuration (hex values) to SharedPreferences
-  Future<void> _saveRemoteConfiguration(String brand, Map<String, String> config) async {
+  Future<void> _saveRemoteConfiguration(
+      String brand, Map<String, String> config) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final configKey = 'remote_config_$brand';
       final configJson = jsonEncode(config);
-      
+
       await prefs.setString(configKey, configJson);
       _savedRemoteConfigs[brand] = Map<String, String>.from(config);
-      
+
       print('Saved remote hex config for $brand: $config');
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("💾 Remote '$brand' saved to local storage with ${config.length} commands"),
-          backgroundColor: Colors.green,
-        ),
-      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                "💾 Remote '$brand' saved to local storage with ${config.length} commands"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
       print('Error saving remote configuration: $e');
     }
   }
+
+  // ---------- BLUETOOTH DATA HANDLING ----------
 
   void _onDataReceived(Uint8List data) {
     final text = utf8.decode(data).trim();
@@ -173,30 +201,61 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   void _processReceivedLine(String text) {
     if (text.isEmpty) return;
 
-    // Temperature response
+    // Temperature response  (e.g. "TEMP:29.42,HUM:56.40")
     if (text.startsWith("TEMP:")) {
-      setState(() => _temperature = text.replaceFirst("TEMP:", "").trim());
-    } 
+      final payload = text.replaceFirst("TEMP:", "").trim(); // "29.42,HUM:56.40"
+      final parts = payload.split(',');
+
+      setState(() {
+        // Only store the temperature part on this screen
+        _temperature = parts.isNotEmpty ? parts[0].trim() : payload;
+      });
+
+      // Add to communication log
+      setState(() {
+        _receivedData.insert(
+          0,
+          "${DateFormat('HH:mm:ss').format(DateTime.now())}: $text",
+        );
+        if (_receivedData.length > 50) {
+          _receivedData.removeLast();
+        }
+      });
+
+      return; // already handled
+    }
+
     // WiFi status responses
-    else if (text.startsWith("WIFI_CONNECTED") || text.contains("WiFi connected")) {
+    if (text.startsWith("WIFI_CONNECTED") ||
+        text.contains("WiFi connected")) {
       final ipPart = text.contains(":") ? text.split(":")[1].trim() : "";
       setState(() {
         _wifiIP = ipPart;
         _isWifiConnected = true;
         _greenLedOn = true;
       });
+
+      // ✅ Save WiFi status for ModeSelectionPage / MQTT config
+      _saveWifiStatus(true, ssid: _ssidController.text.trim());
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("🟢 WiFi Connected${_wifiIP.isNotEmpty ? '. IP: $_wifiIP' : ''}"),
+          content:
+              Text("🟢 WiFi Connected${_wifiIP.isNotEmpty ? '. IP: $_wifiIP' : ''}"),
           backgroundColor: Colors.green,
         ),
       );
-    } 
-    else if (text.startsWith("WIFI_FAILED") || text.contains("WiFi connection failed")) {
+    } else if (text.startsWith("WIFI_FAILED") ||
+        text.contains("WiFi connection failed")) {
       setState(() {
         _isWifiConnected = false;
         _greenLedOn = false;
+        _wifiIP = "";
       });
+
+      // ✅ Update stored WiFi status as disconnected
+      _saveWifiStatus(false);
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("❌ WiFi Connection Failed"),
@@ -205,15 +264,16 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       );
     }
     // Configuration responses - Fixed to handle multiple formats
-    else if (text.contains("IR Code learned:") || 
-             text.contains("Code stored for") ||
-             text.contains("learned") ||
-             text.contains("0x")) {
-      
-      if (_isConfiguring && _configuringBrand.isNotEmpty && _currentConfigKey.isNotEmpty) {
+    else if (text.contains("IR Code learned:") ||
+        text.contains("Code stored for") ||
+        text.contains("learned") ||
+        text.contains("0x")) {
+      if (_isConfiguring &&
+          _configuringBrand.isNotEmpty &&
+          _currentConfigKey.isNotEmpty) {
         // Extract hex code from response
         String hexCode = "";
-        
+
         // Try to find hex code in different formats
         if (text.contains("0x")) {
           final parts = text.split(" ");
@@ -221,31 +281,28 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
             if (part.contains("0x")) {
               // Clean up the hex code (remove any trailing characters)
               hexCode = part.replaceAll(RegExp(r'[^0-9A-Fa-fx]'), '');
-              if (hexCode.length >= 8) { // Valid hex code should be at least 8 characters
+              if (hexCode.length >= 8) {
                 break;
               }
             }
           }
         }
-        
+
         // If no hex found, generate a placeholder (for testing)
         if (hexCode.isEmpty) {
-          hexCode = "0x${DateTime.now().millisecondsSinceEpoch.toRadixString(16).substring(0, 8).toUpperCase()}";
+          hexCode =
+              "0x${DateTime.now().millisecondsSinceEpoch.toRadixString(16).substring(0, 8).toUpperCase()}";
         }
-        
+
         // Store the hex code locally
         if (hexCode.isNotEmpty) {
-          if (_savedRemoteConfigs[_configuringBrand] == null) {
-            _savedRemoteConfigs[_configuringBrand] = {};
-          }
-          
+          _savedRemoteConfigs[_configuringBrand] ??= {};
+
           final keyLower = _currentConfigKey.toLowerCase();
           _savedRemoteConfigs[_configuringBrand]![keyLower] = hexCode;
-          
+
           setState(() {
-            if (_configProgress[_configuringBrand] == null) {
-              _configProgress[_configuringBrand] = [];
-            }
+            _configProgress[_configuringBrand] ??= [];
             if (!_configProgress[_configuringBrand]!.contains(keyLower)) {
               _configProgress[_configuringBrand]!.add(keyLower);
             }
@@ -269,22 +326,26 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
               ),
             );
           }
-          
+
           // Clear current config key after successful storage
           _currentConfigKey = "";
         }
       }
     }
 
-    // Add to communication log
+    // Add to communication log (for non-TEMP lines)
     setState(() {
       _receivedData.insert(
-          0, "${DateFormat('HH:mm:ss').format(DateTime.now())}: $text");
+        0,
+        "${DateFormat('HH:mm:ss').format(DateTime.now())}: $text",
+      );
       if (_receivedData.length > 50) {
         _receivedData.removeLast(); // Keep only last 50 messages
       }
     });
   }
+
+  // ---------- REMOTE CONFIGURATION FLOW ----------
 
   // Start new remote configuration
   void _startNewConfiguration() {
@@ -382,7 +443,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       setState(() {
         _currentConfigKey = key;
       });
-      
+
       _sendCommand("CONFIG:$key");
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -397,41 +458,46 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
 
   // Save complete remote configuration
   void _saveCompleteRemoteConfiguration() async {
-    if (_configuringBrand.isNotEmpty && _savedRemoteConfigs[_configuringBrand] != null) {
+    if (_configuringBrand.isNotEmpty &&
+        _savedRemoteConfigs[_configuringBrand] != null) {
       // Save to local storage
-      await _saveRemoteConfiguration(_configuringBrand, _savedRemoteConfigs[_configuringBrand]!);
-      
+      await _saveRemoteConfiguration(
+          _configuringBrand, _savedRemoteConfigs[_configuringBrand]!);
+
       // Add to saved brands
       setState(() {
         _savedBrands.add(_configuringBrand);
         _brandConfigComplete[_configuringBrand] = true;
         _isConfiguring = false;
-        _configuringBrand = "";
         _currentConfigStep = 0;
         _currentConfigKey = "";
-        _configProgress.remove(_configuringBrand); // Clear progress after saving
+        _configProgress.remove(_configuringBrand);
+        _configuringBrand = "";
       });
-      
+
       // Save brands list
       await _saveBrandsToPreferences();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("✅ Remote saved successfully!"),
-          backgroundColor: Colors.green,
-        ),
-      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Remote saved successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     }
   }
 
   // Send IR command using saved hex code
   void _sendIRCommand(String command, String brand) async {
-    if (_savedRemoteConfigs[brand] != null && _savedRemoteConfigs[brand]![command.toLowerCase()] != null) {
+    if (_savedRemoteConfigs[brand] != null &&
+        _savedRemoteConfigs[brand]![command.toLowerCase()] != null) {
       final hexCode = _savedRemoteConfigs[brand]![command.toLowerCase()]!;
-      
+
       // Send hex code directly to ESP32
       await _sendCommand("SEND_HEX:$hexCode");
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("📡 Sent: ${command.toUpperCase()} ($hexCode) to AC"),
@@ -441,7 +507,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("❌ Command ${command.toUpperCase()} not configured for $brand"),
+          content:
+              Text("❌ Command ${command.toUpperCase()} not configured for $brand"),
           backgroundColor: Colors.red,
         ),
       );
@@ -464,11 +531,11 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              
+
               // Remove from local storage
               final prefs = await SharedPreferences.getInstance();
               await prefs.remove('remote_config_$brand');
-              
+
               setState(() {
                 _savedBrands.remove(brand);
                 _expandedBrands.remove(brand);
@@ -479,9 +546,9 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                   _currentActiveBrand = "";
                 }
               });
-              
+
               await _saveBrandsToPreferences();
-              
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text("❌ Removed '$brand' remote")),
               );
@@ -493,6 +560,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       ),
     );
   }
+
+  // ---------- WIFI / TEMP / RTC ----------
 
   // WiFi Setup Functions
   void _showWifiSetupDialog() {
@@ -536,7 +605,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (_ssidController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
+              if (_ssidController.text.isNotEmpty &&
+                  _passwordController.text.isNotEmpty) {
                 Navigator.pop(context);
                 _sendWifiCredentials();
               }
@@ -550,7 +620,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   }
 
   void _sendWifiCredentials() {
-    _sendCommand("WIFI:${_ssidController.text.trim()},${_passwordController.text.trim()}");
+    _sendCommand(
+        "WIFI:${_ssidController.text.trim()},${_passwordController.text.trim()}");
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("📡 Sending WiFi credentials...")),
     );
@@ -576,15 +647,17 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   Future<void> _sendCommand([String? cmd]) async {
     final text = cmd ?? _commandController.text.trim();
     if (text.isEmpty || !_isConnected) return;
-    
+
     try {
       final data = utf8.encode("$text\n");
       _connection.output.add(Uint8List.fromList(data));
       await _connection.output.allSent;
-      
+
       setState(() {
         _receivedData.insert(
-            0, "${DateFormat('HH:mm:ss').format(DateTime.now())}: You → $text");
+          0,
+          "${DateFormat('HH:mm:ss').format(DateTime.now())}: You → $text",
+        );
         if (cmd == null) _commandController.clear();
       });
     } catch (e) {
@@ -610,6 +683,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       );
     }
   }
+
+  // ---------- UI WIDGETS ----------
 
   // LED Status Widget
   Widget _buildLedStatus() {
@@ -675,16 +750,18 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
 
   // Configuration button widget - Fixed to respond properly
   Widget _configButton(String label, String key, String brand) {
-    final isConfigured = _configProgress[brand]?.contains(key.toLowerCase()) ?? false;
+    final isConfigured =
+        _configProgress[brand]?.contains(key.toLowerCase()) ?? false;
     final isCurrentConfig = _currentConfigKey == key;
 
     return ElevatedButton(
       onPressed: () => _configureButton(key, brand),
       style: ElevatedButton.styleFrom(
-        backgroundColor: isConfigured 
-            ? Colors.green 
+        backgroundColor: isConfigured
+            ? Colors.green
             : (isCurrentConfig ? Colors.orange : Colors.grey.shade300),
-        foregroundColor: (isConfigured || isCurrentConfig) ? Colors.white : Colors.black87,
+        foregroundColor:
+            (isConfigured || isCurrentConfig) ? Colors.white : Colors.black87,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
@@ -692,8 +769,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isConfigured 
-                ? Icons.check 
+            isConfigured
+                ? Icons.check
                 : (isCurrentConfig ? Icons.pending : Icons.radio_button_unchecked),
             size: 16,
           ),
@@ -761,7 +838,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                       if (isCurrentlyConfiguring)
                         Container(
                           margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.orange,
                             borderRadius: BorderRadius.circular(12),
@@ -777,7 +855,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                       if (!isConfigured && !isCurrentlyConfiguring)
                         Container(
                           margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.red,
                             borderRadius: BorderRadius.circular(12),
@@ -853,12 +932,14 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                   child: ElevatedButton.icon(
                     onPressed: _saveCompleteRemoteConfiguration,
                     icon: const Icon(Icons.save, size: 20),
-                    label: const Text("Save Remote", style: TextStyle(fontSize: 16)),
+                    label:
+                        const Text("Save Remote", style: TextStyle(fontSize: 16)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),
@@ -871,16 +952,16 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
               const Text(
                 "Remote Control Buttons:",
                 style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey),
+                    fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey),
               ),
               const SizedBox(height: 8),
-              
+
               // Show saved hex values
-              if (_savedRemoteConfigs[brand] != null && _savedRemoteConfigs[brand]!.isNotEmpty) ...[
+              if (_savedRemoteConfigs[brand] != null &&
+                  _savedRemoteConfigs[brand]!.isNotEmpty) ...[
                 ExpansionTile(
-                  title: const Text("View Hex Codes", style: TextStyle(fontSize: 12)),
+                  title:
+                      const Text("View Hex Codes", style: TextStyle(fontSize: 12)),
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
@@ -889,27 +970,36 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Column(
-                        children: _savedRemoteConfigs[brand]!.entries.map((entry) => 
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(entry.key.toUpperCase(), 
-                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                                Text(entry.value, 
-                                     style: const TextStyle(fontFamily: 'monospace', fontSize: 10)),
-                              ],
-                            ),
-                          )
-                        ).toList(),
+                        children: _savedRemoteConfigs[brand]!.entries
+                            .map((entry) => Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 2),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        entry.key.toUpperCase(),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11),
+                                      ),
+                                      Text(
+                                        entry.value,
+                                        style: const TextStyle(
+                                            fontFamily: 'monospace', fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                ))
+                            .toList(),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
               ],
-              
+
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -931,9 +1021,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
               const Text(
                 "Configuration Required:",
                 style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.red),
+                    fontSize: 14, fontWeight: FontWeight.w600, color: Colors.red),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -957,13 +1045,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     );
   }
 
-  @override
-  void dispose() {
-    _commandController.dispose();
-    _ssidController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
+  // ---------- BUILD ----------
 
   @override
   Widget build(BuildContext context) {
@@ -993,7 +1075,9 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
             child: Row(
               children: [
                 Icon(
-                  _isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                  _isConnected
+                      ? Icons.bluetooth_connected
+                      : Icons.bluetooth_disabled,
                   color: _isConnected ? Colors.lightBlue : Colors.red,
                 ),
                 const SizedBox(width: 10),
@@ -1004,14 +1088,16 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: _isConnected ? Colors.green : Colors.red,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     _isConnected ? "Connected" : "Disconnected",
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    style:
+                        const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),
               ],
@@ -1025,77 +1111,142 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                   // LED Status Indicators
                   _buildLedStatus(),
 
-                  // Device Status & Controls
+                  // Device Status & Controls  (wrapped to avoid overflow)
                   Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        // Temperature Control
-                        Column(
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: _getTemperature,
-                              icon: const Icon(Icons.thermostat, size: 16),
-                              label: const Text("Get Temp", style: TextStyle(fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          // Temperature Control
+                          Column(
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: _getTemperature,
+                                icon:
+                                    const Icon(Icons.thermostat, size: 16),
+                                label: const Text("Get Temp",
+                                    style: TextStyle(fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text("$_temperature °C",
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        // WiFi Control
-                        Column(
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: _showWifiSetupDialog,
-                              icon: const Icon(Icons.wifi, size: 16),
-                              label: const Text("WiFi Setup", style: TextStyle(fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _isWifiConnected ? Colors.green : Colors.orange,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              const SizedBox(height: 4),
+                              Text(
+                                "$_temperature °C",
+                                style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _isWifiConnected ? "Connected" : "Not Connected",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _isWifiConnected ? Colors.green : Colors.grey[600],
-                                fontWeight: FontWeight.w500,
+                            ],
+                          ),
+                          const SizedBox(width: 16),
+
+                          // WiFi Control + MQTT button
+                          Column(
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: _showWifiSetupDialog,
+                                icon: const Icon(Icons.wifi, size: 16),
+                                label: const Text("WiFi Setup",
+                                    style: TextStyle(fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _isWifiConnected
+                                      ? Colors.green
+                                      : Colors.orange,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                ),
                               ),
-                            ),
-                            if (_wifiIP.isNotEmpty)
-                              Text(_wifiIP, style: const TextStyle(fontSize: 10, color: Colors.green)),
-                          ],
-                        ),
-                        // RTC Sync Control
-                        Column(
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: _syncRTCFromPhone,
-                              icon: const Icon(Icons.access_time, size: 16),
-                              label: const Text("Sync RTC", style: TextStyle(fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.deepOrange,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              const SizedBox(height: 4),
+                              Text(
+                                _isWifiConnected
+                                    ? "Connected"
+                                    : "Not Connected",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _isWifiConnected
+                                      ? Colors.green
+                                      : Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              DateFormat('HH:mm').format(DateTime.now()),
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                            ),
-                          ],
-                        ),
-                      ],
+                              if (_wifiIP.isNotEmpty)
+                                Text(
+                                  _wifiIP,
+                                  style: const TextStyle(
+                                      fontSize: 10, color: Colors.green),
+                                ),
+
+                              // ✅ MQTT CONFIG BUTTON – only when WiFi is connected
+                              if (_isWifiConnected) ...[
+                                const SizedBox(height: 6),
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ModeSelectionPage(
+                                          showMqttConfig: true,
+                                          deviceConnection: _connection,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.cloud, size: 16),
+                                  label: const Text(
+                                    "MQTT Config",
+                                    style: TextStyle(fontSize: 11),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 6),
+                                    side: const BorderSide(
+                                        color: Colors.blueAccent),
+                                    foregroundColor: Colors.blueAccent,
+                                    minimumSize: const Size(0, 0),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(width: 16),
+
+                          // RTC Sync Control
+                          Column(
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: _syncRTCFromPhone,
+                                icon: const Icon(Icons.access_time,
+                                    size: 16),
+                                label: const Text("Sync RTC",
+                                    style: TextStyle(fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.deepOrange,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                DateFormat('HH:mm')
+                                    .format(DateTime.now()),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -1105,7 +1256,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          Icon(Icons.settings_remote, size: 64, color: Colors.grey.shade400),
+                          Icon(Icons.settings_remote,
+                              size: 64, color: Colors.grey.shade400),
                           const SizedBox(height: 16),
                           Text(
                             "No Remote Controls Configured",
@@ -1118,7 +1270,9 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                           const SizedBox(height: 8),
                           Text(
                             "Tap the + button to add your first AC remote",
-                            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade500),
                           ),
                           const SizedBox(height: 20),
                           ElevatedButton.icon(
@@ -1128,7 +1282,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
                             ),
                           ),
                         ],
@@ -1156,8 +1311,10 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                             spacing: 10,
                             runSpacing: 8,
                             children: _savedBrands.map((brand) {
-                              final isExpanded = _expandedBrands.contains(brand);
-                              final isConfigured = _brandConfigComplete[brand] ?? false;
+                              final isExpanded =
+                                  _expandedBrands.contains(brand);
+                              final isConfigured =
+                                  _brandConfigComplete[brand] ?? false;
 
                               return ElevatedButton(
                                 onPressed: () {
@@ -1168,22 +1325,33 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                                   });
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: isConfigured ? Colors.teal : Colors.orange,
+                                  backgroundColor: isConfigured
+                                      ? Colors.teal
+                                      : Colors.orange,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 12),
                                   side: isExpanded
-                                      ? const BorderSide(color: Colors.white, width: 2)
+                                      ? const BorderSide(
+                                          color: Colors.white, width: 2)
                                       : null,
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(brand.toUpperCase(),
-                                        style: const TextStyle(
-                                            fontSize: 14, fontWeight: FontWeight.bold)),
+                                    Text(
+                                      brand.toUpperCase(),
+                                      style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold),
+                                    ),
                                     const SizedBox(width: 4),
                                     if (!isConfigured)
-                                      const Icon(Icons.warning, size: 14, color: Colors.white)
+                                      const Icon(
+                                        Icons.warning,
+                                        size: 14,
+                                        color: Colors.white,
+                                      )
                                     else
                                       Icon(
                                         isExpanded
@@ -1201,14 +1369,17 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                     ),
 
                   // Remote Controls for Expanded Brands
-                  ..._expandedBrands.map((brand) => _buildRemoteControls(brand)),
+                  ..._expandedBrands
+                      .map((brand) => _buildRemoteControls(brand))
+                      .toList(),
 
                   // Communication Terminal Section
                   if (_receivedData.isNotEmpty)
                     Container(
                       margin: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border:
+                            Border.all(color: Colors.grey.shade300),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -1224,11 +1395,13 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                               ),
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
                                   "📡 Communication Terminal",
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold),
                                 ),
                                 IconButton(
                                   onPressed: () {
@@ -1236,7 +1409,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                                       _receivedData.clear();
                                     });
                                   },
-                                  icon: const Icon(Icons.clear, size: 16),
+                                  icon:
+                                      const Icon(Icons.clear, size: 16),
                                   tooltip: "Clear Log",
                                 ),
                               ],
@@ -1249,14 +1423,18 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                               itemCount: _receivedData.length,
                               itemBuilder: (context, index) {
                                 final message = _receivedData[index];
-                                final isFromUser = message.contains("You →");
+                                final isFromUser =
+                                    message.contains("You →");
                                 return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
                                   child: Text(
                                     message,
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: isFromUser ? Colors.blue : Colors.black87,
+                                      color: isFromUser
+                                          ? Colors.blue
+                                          : Colors.black87,
                                       fontFamily: 'monospace',
                                     ),
                                   ),
@@ -1279,7 +1457,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
-              border: Border(top: BorderSide(color: Colors.grey.shade300)),
+              border: Border(
+                  top: BorderSide(color: Colors.grey.shade300)),
             ),
             child: Row(
               children: [
@@ -1288,8 +1467,10 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                     controller: _commandController,
                     decoration: InputDecoration(
                       hintText: "Enter custom command...",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                     ),
                     onSubmitted: (_) => _sendCommand(),
                   ),
@@ -1300,7 +1481,8 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.lightBlue,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                   ),
                   child: const Text("Send"),
                 ),
