@@ -1,10 +1,8 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
-import 'package:permission_handler/permission_handler.dart';
 
-import 'package:esp/screens/configuration_page.dart';
+import 'configuration_page.dart';
 
 class BluetoothScannerPage extends StatefulWidget {
   const BluetoothScannerPage({super.key});
@@ -15,158 +13,82 @@ class BluetoothScannerPage extends StatefulWidget {
 
 class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
   bool _isScanning = false;
-  List<BluetoothDiscoveryResult> _devices = [];
+  final List<BluetoothDiscoveryResult> _devices = [];
   StreamSubscription<BluetoothDiscoveryResult>? _streamSubscription;
 
-  // NEW: connecting state
-  bool _isConnecting = false;
-  String? _connectingAddress; // which device is being connected
+  Color get _themeGreen => const Color(0xFFC8E6C9);
 
   @override
   void initState() {
     super.initState();
-    _initialSetup();
+    _checkAndEnableBluetooth();
   }
 
-  Future<void> _initialSetup() async {
-    await _checkAndRequestPermissions();
-    await _checkAndEnableBluetooth();
-  }
-
-  /// Ask for Bluetooth + Location permissions (required for scanning).
-  Future<void> _checkAndRequestPermissions() async {
-    final statuses = await [
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ].request();
-
-    bool allGranted = true;
-    for (final entry in statuses.entries) {
-      if (entry.value.isDenied || entry.value.isPermanentlyDenied) {
-        allGranted = false;
-      }
-    }
-
-    if (!allGranted && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Bluetooth & Location permissions are required for scanning.',
-          ),
-        ),
-      );
-    }
-  }
-
-  /// Ensure Bluetooth is ON.
   Future<void> _checkAndEnableBluetooth() async {
-    bool? isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
-
-    if (isEnabled != true) {
+    final isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
+    if (!(isEnabled ?? false)) {
       final result = await FlutterBluetoothSerial.instance.requestEnable();
-      if (result == true && mounted) {
+      if (result ?? false) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Bluetooth enabled')),
+          const SnackBar(content: Text("✅ Bluetooth enabled")),
         );
-      } else if (mounted) {
+      } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('❌ Bluetooth is required to proceed.')),
+          const SnackBar(
+            content: Text("❌ Bluetooth is required to scan devices."),
+          ),
         );
       }
     }
   }
 
-  /// Start scanning for nearby Bluetooth devices.
   void _startScan() async {
-    // Re-check permissions in case user changed in settings
-    final btScanStatus = await Permission.bluetoothScan.status;
-    final btConnectStatus = await Permission.bluetoothConnect.status;
-    final locStatus = await Permission.location.status;
-
-    if (!btScanStatus.isGranted ||
-        !btConnectStatus.isGranted ||
-        !locStatus.isGranted) {
-      await _checkAndRequestPermissions();
-      return;
-    }
-
     final isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
-    if (isEnabled != true) {
+    if (!(isEnabled ?? false)) {
       await _checkAndEnableBluetooth();
       return;
     }
 
-    // Cancel any existing discovery before starting a new one
-    await _streamSubscription?.cancel();
+    // cancel previous scan if any
+    _streamSubscription?.cancel();
 
     setState(() {
       _isScanning = true;
       _devices.clear();
     });
 
-    try {
-      _streamSubscription =
-          FlutterBluetoothSerial.instance.startDiscovery().listen((result) {
-        setState(() {
-          final index =
-              _devices.indexWhere((d) => d.device.address == result.device.address);
-          if (index >= 0) {
-            _devices[index] = result;
-          } else {
-            _devices.add(result);
-          }
-        });
-      });
-
-      _streamSubscription?.onDone(() {
-        if (mounted) {
-          setState(() => _isScanning = false);
+    _streamSubscription =
+        FlutterBluetoothSerial.instance.startDiscovery().listen((result) {
+      setState(() {
+        final index = _devices
+            .indexWhere((d) => d.device.address == result.device.address);
+        if (index >= 0) {
+          _devices[index] = result;
+        } else {
+          _devices.add(result);
         }
       });
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isScanning = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start scan: $e')),
-        );
-      }
-    }
-  }
-
-  /// Connect to a selected device and open ConfigurationPage.
-  Future<void> _connectToDevice(BluetoothDevice device) async {
-    // UI: show "connecting" state for this device
-    setState(() {
-      _isConnecting = true;
-      _connectingAddress = device.address;
     });
 
-    // Optional: show toast that connection is starting
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Connecting to ${device.name ?? device.address}...'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    _streamSubscription?.onDone(() {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
+    });
+  }
 
+  Future<void> _connectToDevice(BluetoothDevice device) async {
     try {
-      // Discovery should be stopped before attempting connection
-      await FlutterBluetoothSerial.instance.cancelDiscovery();
-      await _streamSubscription?.cancel();
-      setState(() => _isScanning = false);
-
       final connection = await BluetoothConnection.toAddress(device.address);
-
-      if (!mounted) return;
-
-      // Clear connecting state
-      setState(() {
-        _isConnecting = false;
-        _connectingAddress = null;
-      });
-
-      if (connection.isConnected) {
+      if (connection.isConnected && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Connected to ${device.name ?? device.address}"),
+            backgroundColor: Colors.green,
+          ),
+        );
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -176,30 +98,19 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
             ),
           ),
         );
-      } else {
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Failed to connect to ${device.name ?? device.address}',
+              "Failed to connect to ${device.name ?? device.address}\n"
+              "Tip: Pair this device once in Bluetooth settings.",
             ),
+            backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _isConnecting = false;
-        _connectingAddress = null;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to connect to ${device.name ?? device.address}\n$e',
-          ),
-        ),
-      );
     }
   }
 
@@ -209,95 +120,178 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
     super.dispose();
   }
 
+  Widget _buildDeviceTile(BluetoothDiscoveryResult result) {
+    final device = result.device;
+    final rssi = result.rssi;
+    final name = device.name ?? "Unknown Device";
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 2,
+      child: ListTile(
+        leading: Container(
+          decoration: BoxDecoration(
+            color: _themeGreen,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          padding: const EdgeInsets.all(8),
+          child: const Icon(
+            Icons.bluetooth,
+            color: Colors.black87,
+          ),
+        ),
+        title: Text(
+          name,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          "${device.address}\nRSSI: $rssi dBm",
+          style: const TextStyle(fontSize: 12),
+        ),
+        isThreeLine: true,
+        trailing: ElevatedButton(
+          onPressed: () => _connectToDevice(device),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _themeGreen,
+            foregroundColor: Colors.black,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: const Text(
+            "Connect",
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bluetooth Scanner'),
-        backgroundColor: Colors.lightBlue,
+        backgroundColor: _themeGreen,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
+        title: const Text(
+          "Bluetooth Scanner",
+          style: TextStyle(color: Colors.black),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: (_isScanning || _isConnecting) ? null : _startScan,
-                icon: const Icon(Icons.search),
-                label: Text(_isScanning ? 'Scanning...' : 'Scan'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.lightBlue,
-                  minimumSize: const Size(180, 50),
-                  textStyle: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+      body: Column(
+        children: [
+          // Header section with same green theme
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: _themeGreen,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
               ),
             ),
-            const SizedBox(height: 30),
-            if (_devices.isNotEmpty)
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _devices.length,
-                  itemBuilder: (context, index) {
-                    final result = _devices[index];
-                    final device = result.device;
-
-                    final bool isThisConnecting =
-                        _isConnecting && _connectingAddress == device.address;
-
-                    return Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ListTile(
-                        leading: const Icon(
-                          Icons.bluetooth,
-                          color: Colors.lightBlue,
-                        ),
-                        title: Text(
-                          device.name ?? 'Unknown Device',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(device.address),
-                        trailing: isThisConnecting
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : ElevatedButton(
-                                onPressed: _isConnecting
-                                    ? null
-                                    : () => _connectToDevice(device),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.lightBlue,
-                                ),
-                                child: const Text('Connect'),
-                              ),
-                      ),
-                    );
-                  },
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.settings_remote,
+                  size: 36,
+                  color: Colors.black87,
                 ),
-              )
-            else if (!_isScanning)
-              const Expanded(
-                child: Center(
-                  child: Text(
-                    'No devices found yet. Click Scan.',
-                    style: TextStyle(fontSize: 16),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Scan for IR Blaster",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        "Turn ON the IR device.",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              )
-            else
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Scan button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isScanning ? null : _startScan,
+                    icon: const Icon(Icons.search),
+                    label: Text(
+                      _isScanning ? "Scanning..." : "Scan Devices",
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _themeGreen,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
+            ),
+          ),
+
+          if (_isScanning) ...[
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: LinearProgressIndicator(),
+            ),
           ],
-        ),
+
+          const SizedBox(height: 8),
+
+          // Devices list
+          Expanded(
+            child: _devices.isNotEmpty
+                ? ListView.builder(
+                    itemCount: _devices.length,
+                    itemBuilder: (context, index) =>
+                        _buildDeviceTile(_devices[index]),
+                  )
+                : Center(
+                    child: Text(
+                      _isScanning
+                          ? "Scanning for Bluetooth devices..."
+                          : "No devices found.\nTap 'Scan Devices' to search again.",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
