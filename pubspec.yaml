@@ -30,10 +30,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/
-    - assets/images/ac.jpg
-    - assets/images/tv.jpg
-    - assets/images/settopbox.jpg
+    
+
 
 flutter_icons:
   android: "launcher_icon"

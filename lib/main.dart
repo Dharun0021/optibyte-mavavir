@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:esp/screens/login_page.dart';
 import 'package:esp/screens/mode_selection_page.dart';
 import 'package:esp/auth/auth_service.dart';
-import 'package:esp/screens/register_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -47,7 +46,7 @@ class MyApp extends StatelessWidget {
       ),
       routes: {
         '/login': (context) => LoginPage(),
-        '/register': (context) => RegisterPage(),
+        //'/register': (context) => RegisterPage(),
         '/mode_selection': (context) => const ModeSelectionPage(),
         // '/home': (context) => const HomePage(),
       },
